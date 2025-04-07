@@ -1,0 +1,222 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bitpanda Dashboard</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    form {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    #response {
+      margin-top: 20px;
+      color: red;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="loginSection">
+  <h2>Login</h2>
+  <form id="loginForm">
+    <label for="username">Benutzername:</label>
+    <input type="text" id="username" name="username" required />
+
+    <label for="password">Passwort:</label>
+    <input type="password" id="password" name="password" required />
+
+    <button type="submit">Login</button>
+  </form>
+</div>
+
+<div id="dashboardSection" style="display: none;">
+  <h1>Bitpanda Wallets Übersicht</h1>
+
+  <table id="walletTable">
+    <thead>
+    <tr>
+      <th>Wallet Name</th>
+      <th>Symbol</th>
+      <th>Balance</th>
+    </tr>
+    </thead>
+    <tbody>
+    <!-- Dynamische Wallets -->
+    </tbody>
+  </table>
+
+  <button id="logoutBtn">Logout</button>
+  <button id="saveDataBtn">Daten speichern</button>
+
+  <div id="response"></div>
+</div>
+
+<script>
+  let USER = null;
+  let PASSWORD = null;
+  let currentWallets = [];
+
+  $(document).ready(function () {
+
+    function displayWallets(wallets) {
+      const tableBody = $('#walletTable tbody');
+      tableBody.empty();
+      wallets.forEach(wallet => {
+        const row = `<tr>
+            <td>${wallet.attributes.name}</td>
+            <td>${wallet.attributes.cryptocoin_symbol}</td>
+            <td>${parseFloat(wallet.attributes.balance).toFixed(8)}</td>
+          </tr>`;
+        tableBody.append(row);
+      });
+    }
+
+    function fetchWallets() {
+      $.ajax({
+        url: "/WalletAbfrage",
+        method: "GET",
+        dataType: "json",
+        success: function (data) {
+          const wallets = [
+            ...data.data.attributes.cryptocoin.attributes.wallets,
+            ...data.data.attributes.commodity.metal.attributes.wallets
+          ];
+
+          wallets.sort((a, b) =>
+                  a.attributes.cryptocoin_symbol.localeCompare(b.attributes.cryptocoin_symbol)
+          );
+
+          currentWallets = wallets.filter(wallet => parseFloat(wallet.attributes.balance) > 0);
+
+          displayWallets(currentWallets);
+        },
+        error: function () {
+          $('#response').text('Fehler beim Abrufen der Wallet-Daten.');
+        }
+      });
+    }
+
+    // Login Formular
+    $('#loginForm').submit(function (e) {
+      e.preventDefault();
+
+      const username = $('#username').val();
+      const password = $('#password').val();
+
+      $.ajax({
+        url: '/api/login',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ username, password }),
+        success: function (response) {
+          if (response.success) {
+            USER = username;
+            PASSWORD = password;
+            $('#loginSection').hide();
+            $('#dashboardSection').show();
+            $('#response').text('');
+            fetchWallets();
+          } else {
+            alert("Login fehlgeschlagen!");
+          }
+        },
+        error: function () {
+          $('#response').text('Fehler beim Login.');
+        }
+      });
+    });
+
+    // Logout
+    $('#logoutBtn').click(function () {
+      USER = null;
+      PASSWORD = null;
+      currentWallets = [];
+      $('#walletTable tbody').empty();
+      $('#dashboardSection').hide();
+      $('#loginSection').show();
+    });
+
+    // Daten speichern
+    $('#saveDataBtn').click(function () {
+      if (!USER || !PASSWORD || currentWallets.length === 0) {
+        alert("Keine Daten zum Speichern vorhanden.");
+        return;
+      }
+
+      const coinBalances = currentWallets.reduce((acc, wallet) => {
+        const symbol = wallet.attributes.cryptocoin_symbol;
+        const balance = parseFloat(wallet.attributes.balance);
+        acc[symbol] = (acc[symbol] || 0) + balance;
+        return acc;
+      }, {});
+
+      $.ajax({
+        url: '/api/speicherung',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+          username: USER,
+          password: PASSWORD,
+          anzahlCoins: Object.keys(coinBalances).length,
+          bestand: coinBalances
+        }),
+        success: function () {
+          alert("Bestände gespeichert!");
+        },
+        error: function () {
+          alert("Fehler beim Speichern der Bestände.");
+        }
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

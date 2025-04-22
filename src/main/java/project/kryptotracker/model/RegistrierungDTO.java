@@ -1,15 +1,20 @@
 package project.kryptotracker.model;
 
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import java.util.Map;
 
-@Data
-@AllArgsConstructor
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
 @NoArgsConstructor
-public class SpeicherungDTO {
+@AllArgsConstructor
+
+public class RegistrierungDTO {
     private String username;
     private String password;
-    private Map<String, CoinData> bestand; // CoinData enthält Menge, Preis und Wert
+    private String apiKey;
+
+    // Getter und Setter
 }

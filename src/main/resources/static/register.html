@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <title>Registrieren</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loginSection">
+    <h2>Registrieren</h2>
+    <form id="registrationForm">
+        <label for="newUsername">Benutzername:</label>
+        <input type="text" id="newUsername" name="username" required />
+
+        <label for="newPassword">Passwort:</label>
+        <input type="password" id="newPassword" name="password" required />
+
+        <label for="apiKey">API Key:</label>
+        <input type="text" id="apiKey" name="apiKey" required />
+
+        <button type="submit">Registrieren</button>
+    </form>
+
+    <div id="regResponse"></div>
+</div>
+
+<script>
+    $('#registrationForm').submit(function (e) {
+        e.preventDefault();
+
+        const username = $('#newUsername').val();
+        const password = $('#newPassword').val();
+        const apiKey = $('#apiKey').val();
+
+        $.ajax({
+            url: '/api/register',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({username, password, apiKey}),
+            success: function (response) {
+                alert(response); // einfache Antwort
+                window.location.href = '/';
+            },
+            error: function (xhr) {
+                $('#regResponse').text("Fehler beim Registrieren: " + xhr.responseText);
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

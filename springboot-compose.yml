@@ -1,0 +1,6 @@
+services:
+  springboot_server:
+    image: sbserver
+    container_name: cont
+    ports :
+      - 8081:8081

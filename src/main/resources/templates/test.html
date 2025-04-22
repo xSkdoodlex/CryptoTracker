@@ -1,10 +1,334 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Title</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bitpanda Dashboard</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    .tab-navigator {
+      display: flex;
+      margin-bottom: 20px;
+    }
+    .tab-button {
+      padding: 10px 20px;
+      background-color: #f1f1f1;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .tab-button.active {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    #offlineDataNotice {
+      color: #ff5722;
+      font-style: italic;
+      margin-bottom: 15px;
+    }
+  </style>
 </head>
 <body>
+
+<div id="loginSection">
+  <h2>Willkommen zurück</h2>
+  <form id="loginForm">
+    <label for="username">Benutzername:</label>
+    <input type="text" id="username" name="username" required />
+    <label for="password">Passwort:</label>
+    <input type="password" id="password" name="password" required />
+    <button type="submit">Einloggen</button>
+  </form>
+  <form id="registerForm">
+    <button type="newuser">Registrieren</button>
+  </form>
+</div>
+
+<div id="dashboardSection" style="display: none;">
+  <h1>Bitpanda Wallets Übersicht</h1>
+
+  <div class="tab-navigator">
+    <button class="tab-button active" data-tab="online">Online Daten</button>
+    <button class="tab-button" data-tab="offline">Offline Daten</button>
+  </div>
+
+  <div id="offlineDataNotice" class="tab-content" style="display:none;">
+    Sie sehen gespeicherte Offline-Daten. Diese werden nicht automatisch aktualisiert.
+  </div>
+
+  <div id="onlineTab" class="tab-content active">
+    <table id="walletTable" class="wallet-table">
+      <thead>
+      <tr>
+        <th>Wallet Name</th>
+        <th>Symbol</th>
+        <th>Balance</th>
+        <th>Preis (USDT)</th>
+        <th>Wert (USDT)</th>
+      </tr>
+      </thead>
+      <tbody>
+      <!-- Dynamische Wallets -->
+      </tbody>
+    </table>
+  </div>
+
+  <div id="offlineTab" class="tab-content">
+    <table id="offlineWalletTable" class="wallet-table">
+      <thead>
+      <tr>
+        <th>Wallet Name</th>
+        <th>Symbol</th>
+        <th>Balance</th>
+        <th>Preis (USDT)</th>
+        <th>Wert (USDT)</th>
+        <th>Gespeichert am</th>
+      </tr>
+      </thead>
+      <tbody>
+      <!-- Offline Wallets -->
+      </tbody>
+    </table>
+  </div>
+
+  <button id="logoutBtn">Logout</button>
+  <button id="saveDataBtn">Daten speichern</button>
+  <button id="refreshOfflineBtn" style="display:none;">Offline-Daten aktualisieren</button>
+
+  <div id="response"></div>
+</div>
+
+<script>
+  let USER = null;
+  let PASSWORD = null;
+  let currentWallets = [];
+  let offlineWallets = [];
+
+  $(document).ready(function () {
+    // Tab-Navigation
+    $('.tab-button').click(function() {
+      const tabId = $(this).data('tab');
+
+      // Tab-Buttons aktualisieren
+      $('.tab-button').removeClass('active');
+      $(this).addClass('active');
+
+      // Tab-Inhalte aktualisieren
+      $('.tab-content').removeClass('active');
+      $(`#${tabId}Tab`).addClass('active');
+
+      // Offline-Hinweis anzeigen/verstecken
+      if (tabId === 'offline') {
+        $('#offlineDataNotice').show();
+        $('#refreshOfflineBtn').show();
+        loadOfflineData();
+      } else {
+        $('#offlineDataNotice').hide();
+        $('#refreshOfflineBtn').hide();
+      }
+    });
+
+    function displayWallets(wallets, isOnline = true) {
+      const tableBody = isOnline ? $('#walletTable tbody') : $('#offlineWalletTable tbody');
+      tableBody.empty();
+
+      wallets.forEach((wallet, index) => {
+        const symbol = wallet.symbol || wallet.attributes?.cryptocoin_symbol;
+        const balance = parseFloat(wallet.balance || wallet.attributes?.balance);
+        const price = wallet.price || (wallet.data && wallet.data.price);
+        const value = wallet.value || (wallet.data && wallet.data.value);
+        const savedAt = wallet.savedAt;
+
+        const row = `<tr id="${isOnline ? 'wallet' : 'offlineWallet'}Row-${index}">
+            <td>${wallet.name || wallet.attributes?.name}</td>
+            <td>${symbol}</td>
+            <td>${balance.toFixed(8)}</td>
+            <td>${price ? price.toFixed(5) : 'N/A'}</td>
+            <td>${value ? value.toFixed(5) : 'N/A'}</td>
+            ${!isOnline ? `<td>${savedAt || 'Unbekannt'}</td>` : ''}
+          </tr>`;
+
+        tableBody.append(row);
+      });
+
+      if (isOnline) {
+        fetchPrices(wallets);
+      }
+    }
+
+    function fetchWallets() {
+      $.ajax({
+        url: "/WalletAbfrage",
+        method: "GET",
+        dataType: "json",
+        success: function (data) {
+          const wallets = [
+            ...data.data.attributes.cryptocoin.attributes.wallets,
+            ...data.data.attributes.commodity.metal.attributes.wallets
+          ];
+
+          wallets.sort((a, b) =>
+                  a.attributes.cryptocoin_symbol.localeCompare(b.attributes.cryptocoin_symbol)
+          );
+
+          currentWallets = wallets.filter(wallet => parseFloat(wallet.attributes.balance) > 0);
+          displayWallets(currentWallets);
+        },
+        error: function () {
+          $('#response').text('Fehler beim Abrufen der Wallet-Daten.');
+        }
+      });
+    }
+
+    function fetchPrices(wallets) {
+      wallets.forEach((wallet, index) => {
+        const symbol = wallet.attributes.cryptocoin_symbol;
+        const pair = `${symbol}USDT`;
+        const balance = parseFloat(wallet.attributes.balance);
+
+        $.ajax({
+          url: `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`,
+          method: "GET",
+          success: function (data) {
+            const price = parseFloat(data.price);
+            const value = price * balance;
+
+            $(`#price-${index}`).text(price.toFixed(5));
+            $(`#value-${index}`).text(value.toFixed(5));
+          },
+          error: function () {
+            $(`#price-${index}`).text("0.00");
+            $(`#value-${index}`).text("0.00");
+          }
+        });
+      });
+    }
+
+    function loadOfflineData() {
+      if (!USER) return;
+
+      $.ajax({
+        url: '/api/getSavedData',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ username: USER }),
+        success: function (response) {
+          if (response.success && response.data) {
+            offlineWallets = response.data;
+            displayWallets(offlineWallets, false);
+          } else {
+            $('#offlineWalletTable tbody').html('<tr><td colspan="6">Keine Offline-Daten gefunden</td></tr>');
+          }
+        },
+        error: function () {
+          $('#offlineWalletTable tbody').html('<tr><td colspan="6">Fehler beim Laden der Offline-Daten</td></tr>');
+        }
+      });
+    }
+
+    $('#loginForm').submit(function (e) {
+      e.preventDefault();
+
+      const username = $('#username').val();
+      const password = $('#password').val();
+
+      $.ajax({
+        url: '/api/login',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({username, password}),
+        success: function (response) {
+          if (response.success) {
+            USER = username;
+            PASSWORD = password;
+            $('#loginSection').hide();
+            $('#dashboardSection').show();
+            $('#response').text('');
+            fetchWallets();
+          } else {
+            alert("Login fehlgeschlagen!");
+          }
+        },
+        error: function () {
+          $('#response').text('Fehler beim Login.');
+        }
+      });
+    });
+
+    $('#registerForm').submit(function (e) {
+      e.preventDefault();
+      window.location.href = 'register.html';
+    });
+
+    $('#logoutBtn').click(function () {
+      USER = null;
+      PASSWORD = null;
+      currentWallets = [];
+      offlineWallets = [];
+      $('#walletTable tbody').empty();
+      $('#offlineWalletTable tbody').empty();
+      $('#dashboardSection').hide();
+      $('#loginSection').show();
+    });
+
+    $('#saveDataBtn').click(function () {
+      if (!USER || !PASSWORD || currentWallets.length === 0) {
+        alert("Keine Daten zum Speichern vorhanden.");
+        return;
+      }
+
+      const coinBalances = currentWallets.map((wallet, index) => {
+        const symbol = wallet.attributes.cryptocoin_symbol;
+        const balance = parseFloat(wallet.attributes.balance);
+        const price = parseFloat($(`#price-${index}`).text()) || 0;
+        const value = price * balance;
+
+        return {
+          name: wallet.attributes.name,
+          symbol: symbol,
+          balance: balance,
+          price: price,
+          value: value,
+          savedAt: new Date().toLocaleString()
+        };
+      });
+
+      $.ajax({
+        url: '/api/saveOfflineData',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+          username: USER,
+          data: coinBalances
+        }),
+        success: function (response) {
+          if (response.success) {
+            alert("Daten erfolgreich offline gespeichert!");
+            if ($('#offlineTab').hasClass('active')) {
+              loadOfflineData();
+            }
+          } else {
+            alert("Speichern fehlgeschlagen: " + response.message);
+          }
+        },
+        error: function () {
+          alert("Fehler beim Speichern der Offline-Daten.");
+        }
+      });
+    });
+
+    $('#refreshOfflineBtn').click(function() {
+      loadOfflineData();
+    });
+  });
+</script>
 
 </body>
 </html>

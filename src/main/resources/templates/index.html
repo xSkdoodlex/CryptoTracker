@@ -1,83 +1,48 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="style.css">
   <title>Bitpanda Dashboard</title>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f9;
-      margin: 0;
-      padding: 20px;
-    }
-    h1, h2 {
-      color: #333;
-    }
-    form {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      margin-bottom: 5px;
-    }
-    input[type="text"], input[type="password"] {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      padding: 10px 20px;
-      background-color: #4CAF50;
-      border: none;
-      color: white;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #45a049;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 10px;
-      border: 1px solid #ddd;
-      text-align: left;
-    }
-    th {
-      background-color: #f2f2f2;
-    }
-    #response {
-      margin-top: 20px;
-      color: red;
-    }
-  </style>
 </head>
-
 <body>
 
 <div id="loginSection">
-  <h2>Login</h2>
+  <h2>Willkommen zurück</h2>
   <form id="loginForm">
+
     <label for="username">Benutzername:</label>
     <input type="text" id="username" name="username" required />
-
     <label for="password">Passwort:</label>
     <input type="password" id="password" name="password" required />
+    <button type="submit">Einloggen</button>
 
-    <button type="submit">Login</button>
   </form>
+  <form id="registerForm">
+    <button type="newuser">Registrieren</button>
+  </form>
+
 </div>
 
 <div id="dashboardSection" style="display: none;">
-  <h1>Bitpanda Wallets Übersicht</h1>
+
+  <div id="modeNavigator">
+    <button id="onlineModeBtn">Online-Daten</button>
+    <button id="offlineModeBtn">Offline-Daten</button>
+    <button id="newsModeBtn">News</button> <!-- NEU -->
+  </div>
+
+
+  <div id="newsSection" style="display: none;">
+    <h2>Krypto-News</h2>
+    <div id="newsListContainer" style="max-height: 500px; overflow-y: auto;"></div>
+  </div>
+
+
+
+  <h1 id="uebersicht">Bitpanda Wallets Übersicht</h1>
 
   <table id="walletTable">
     <thead>
@@ -85,37 +50,72 @@
       <th>Wallet Name</th>
       <th>Symbol</th>
       <th>Balance</th>
+      <th>Preis (USDT)</th>
+      <th>Wert (USDT)</th>
     </tr>
     </thead>
     <tbody>
     <!-- Dynamische Wallets -->
     </tbody>
   </table>
+  <table id="coinTable" style="display: none;">
+    <thead>
+    <tr>
+      <th>Coin</th>
+      <th>Menge</th>
+      <th>Preis</th>
+      <th>Wert</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
 
   <button id="logoutBtn">Logout</button>
-  <button id="saveDataBtn">Daten speichern</button>
+  <div id="saveSection">
+    <button id="saveDataBtn">Daten speichern</button>
+    <div id="lastSavedContainer">
+      <div class="lastSavedLabel">Letzte Speicherung:</div>
+      <div id="lastSavedTime" class="lastSavedValue">Nie</div>
+    </div>
+  </div>
 
   <div id="response"></div>
+
+
+
+
 </div>
+
+
 
 <script>
   let USER = null;
   let PASSWORD = null;
   let currentWallets = [];
+  $('#onlineModeBtn').addClass('active');
 
   $(document).ready(function () {
-
     function displayWallets(wallets) {
       const tableBody = $('#walletTable tbody');
       tableBody.empty();
-      wallets.forEach(wallet => {
-        const row = `<tr>
+
+      wallets.forEach((wallet, index) => {
+        const symbol = wallet.attributes.cryptocoin_symbol;
+        const balance = parseFloat(wallet.attributes.balance);
+
+        const row = `<tr id="walletRow-${index}">
             <td>${wallet.attributes.name}</td>
-            <td>${wallet.attributes.cryptocoin_symbol}</td>
-            <td>${parseFloat(wallet.attributes.balance).toFixed(8)}</td>
+            <td>${symbol}</td>
+            <td id="balance-${index}">${balance.toFixed(8)}</td>
+            <td id="price-${index}">Lade...</td>
+            <td id="value-${index}">-</td>
           </tr>`;
+
         tableBody.append(row);
       });
+
+      fetchPrices(wallets);
     }
 
     function fetchWallets() {
@@ -138,42 +138,67 @@
           displayWallets(currentWallets);
         },
         error: function () {
-          $('#response').text('Fehler beim Abrufen der Wallet-Daten.');
+          alert('Fehler beim Abrufen der Wallet-Daten.');
         }
       });
     }
 
-    // Login Formular
+    function fetchPrices(wallets) {
+      wallets.forEach((wallet, index) => {
+        const symbol = wallet.attributes.cryptocoin_symbol;
+        const pair = `${symbol}USDT`;
+        const balance = parseFloat(wallet.attributes.balance);
+
+        $.ajax({
+          url: `https://api.binance.com/api/v3/ticker/price?symbol=${pair}`,
+          method: "GET",
+          success: function (data) {
+            const price = parseFloat(data.price);
+            const value = price * balance;
+
+            $(`#price-${index}`).text(price.toFixed(5));
+            $(`#value-${index}`).text(value.toFixed(5));
+          },
+          error: function () {
+            $(`#price-${index}`).text("0.00");
+            $(`#value-${index}`).text("0.00");
+          }
+        });
+      });
+    }
+
     $('#loginForm').submit(function (e) {
       e.preventDefault();
-
-      const username = $('#username').val();
-      const password = $('#password').val();
-
       $.ajax({
         url: '/api/login',
         method: 'POST',
+        data: JSON.stringify({
+          username: $('#username').val(),
+          password: $('#password').val()
+        }),
         contentType: 'application/json',
-        data: JSON.stringify({ username, password }),
         success: function (response) {
           if (response.success) {
-            USER = username;
-            PASSWORD = password;
+            USER = $('#username').val();
             $('#loginSection').hide();
             $('#dashboardSection').show();
-            $('#response').text('');
             fetchWallets();
-          } else {
-            alert("Login fehlgeschlagen!");
+
+            // Neu: Letzten Speicherzeitpunkt laden
+            $.get(`/api/lastSaved?username=${USER}`, function(time) {
+              $('#lastSavedTime').text(time || "Nie gespeichert");
+            });
           }
-        },
-        error: function () {
-          $('#response').text('Fehler beim Login.');
         }
       });
     });
 
-    // Logout
+
+    $('#registerForm').submit(function (e) {
+      e.preventDefault();
+      window.location.href = 'register.html';
+    });
+
     $('#logoutBtn').click(function () {
       USER = null;
       PASSWORD = null;
@@ -183,19 +208,25 @@
       $('#loginSection').show();
     });
 
-    // Daten speichern
-    $('#saveDataBtn').click(function () {
-      if (!USER || !PASSWORD || currentWallets.length === 0) {
-        alert("Keine Daten zum Speichern vorhanden.");
-        return;
-      }
+    $('#saveDataBtn').click(function() {
+      const now = new Date().toLocaleString('de-DE');
+      $('#lastSavedTime').text("Speichern...");
+      const coinBalances = {};
 
-      const coinBalances = currentWallets.reduce((acc, wallet) => {
+      currentWallets.forEach(wallet => {
         const symbol = wallet.attributes.cryptocoin_symbol;
         const balance = parseFloat(wallet.attributes.balance);
-        acc[symbol] = (acc[symbol] || 0) + balance;
-        return acc;
-      }, {});
+        const index = currentWallets.indexOf(wallet);  // <- Index holen
+        const priceText = $(`#price-${index}`).text();
+        const price = priceText && priceText !== "Lade..." && priceText !== "0.00" ? parseFloat(priceText) : 0;
+        const value = balance * price;
+
+        coinBalances[symbol] = [{
+          amount: balance,
+          price: price,
+          value: value
+        }];
+      });
 
       $.ajax({
         url: '/api/speicherung',
@@ -203,18 +234,165 @@
         contentType: 'application/json',
         data: JSON.stringify({
           username: USER,
-          password: PASSWORD,
-          anzahlCoins: Object.keys(coinBalances).length,
           bestand: coinBalances
         }),
-        success: function () {
-          alert("Bestände gespeichert!");
+        success: function(response) {
+          $('#lastSavedTime').text(+ now);
+          $.get(`/api/lastSaved?username=${USER}`, function(dbTime) {
+            $('#lastSavedTime').text((dbTime || now));
+          });
         },
-        error: function () {
-          alert("Fehler beim Speichern der Bestände.");
+        error: function(xhr) {
+          $('#lastSavedTime').text("Fehler beim Speichern: " + xhr.responseText);
         }
       });
     });
+
+    let isOfflineMode = false;
+
+// Offline-Daten-Simulation (kann später durch echten Fetch ersetzt werden)
+    function ladeOfflineBestaende(username) {
+      $.ajax({
+        url: '/api/offline-bestaende',
+        method: 'GET',
+        data: { username: USER },
+        success: function(response) {
+          const tableBody = $("#coinTable tbody");
+          tableBody.empty();
+
+          // Durchlauf durch alle Coins im JSON
+          $.each(response, function(coinName, coinDataList) {
+            $.each(coinDataList, function(index, coinData) {
+              // Hier sicherstellen, dass wir die richtigen Feldnamen verwenden
+              const amount = coinData.amount || coinData.Menge;
+              const price = coinData.price || coinData.Preis;
+              const value = coinData.value || coinData.Wert;
+
+              const row = `<tr>
+                        <td>${coinName}</td>
+                        <td>${amount}</td>
+                        <td>${price}</td>
+                        <td>${value}</td>
+                    </tr>`;
+              tableBody.append(row);
+            });
+          });
+        },
+        error: function(xhr) {
+          console.error("Fehler beim Laden der Offline-Bestände:", xhr.responseText);
+          $("#coinTable tbody").html("<tr><td colspan='4'>Fehler beim Laden der Daten</td></tr>");
+        }
+      });
+    }
+
+    function fetchLastSavedTime(username) {
+      $.ajax({
+        url: `/api/lastSaved?username=${username}`,
+        method: 'GET',
+        success: function(data) {
+          $('#lastSavedTime').text(data || "Nie gespeichert");
+        },
+        error: function() {
+          $('#lastSavedTime').text("Fehler beim Laden");
+        }
+      });
+    }
+
+    // Bei Klick auf den Offline-Button
+    $('#offlineModeBtn').click(function () {
+      isOfflineMode = true;
+      $('#onlineModeBtn').removeClass('active');
+      $('#newsModeBtn').removeClass('active');
+      $(this).addClass('active');
+      $("#newsSection").hide(); // Versteckt den News-Bereich, wenn der Offline-Modus aktiv wird
+      $("#uebersicht").show();
+      $("#saveDataBtn").show();
+      $('#walletTable').hide(); // Online-Tabelle ausblenden
+      $('#coinTable').show();   // Offline-Tabelle anzeigen
+
+      ladeOfflineBestaende(USER); // Offline-Daten laden
+    });
+
+// Bei Klick auf den Online-Button
+    $('#onlineModeBtn').click(function () {
+      isOfflineMode = false;
+      $('#offlineModeBtn').removeClass('active');
+      $('#newsModeBtn').removeClass('active');
+      $(this).addClass('active');
+      $("#newsSection").hide(); // Versteckt den News-Bereich, wenn der Online-Modus aktiv wird
+      $("#uebersicht").show();
+      $("#saveDataBtn").show();
+      $('#coinTable').hide();     // Offline-Tabelle ausblenden
+      $('#walletTable').show();   // Online-Tabelle anzeigen
+
+      fetchWallets(); // Online-Daten laden
+    });
+
+    function ladeNewsFuerCoins(coins) {
+      if (!coins || coins.length === 0) {
+        $("#newsListContainer").html("<p>Keine Internetverbindung.</p>");
+        return;
+      }
+
+      $("#newsListContainer").empty();
+
+      coins.forEach(coin => {
+        const symbol = coin.attributes.cryptocoin_symbol.toLowerCase();
+
+        $.ajax({
+          url: `/api/news?symbols=${symbol}`,
+          method: "GET",
+          success: function(newsData) {
+            const block = $('<div class="news-coin-block"></div>');
+            block.append(`<h3>${symbol.toUpperCase()}</h3>`);
+
+            const list = $('<ul></ul>');
+            if (!newsData || newsData.length === 0) {
+              list.append("<li>Keine News gefunden.</li>");
+            } else {
+              newsData.forEach(news => {
+                const li = $(`<li><a href="${news.url}" target="_blank">${news.title}</a></li>`);
+                list.append(li);
+              });
+            }
+
+            block.append(list);
+            $("#newsListContainer").append(block);
+          },
+          error: function(xhr) {
+            console.error(`Fehler bei ${symbol}:`, xhr.responseText);
+          }
+        });
+      });
+    }
+
+    $("#newsModeBtn").click(function () {
+      if ($("#newsSection").is(":visible")) {
+        // Wenn News bereits angezeigt werden, dann ausblenden
+        $("#newsSection").hide();
+        $(this).removeClass('active');
+      } else {
+        // Ansonsten den News-Bereich anzeigen
+        isOfflineMode = false;
+        $('#offlineModeBtn').removeClass('active');
+        $('#onlineModeBtn').removeClass('active');
+        $(this).addClass('active');
+        $("#newsSection").show();
+        $("#walletTable, #coinTable").hide();
+        $("#uebersicht").hide();
+        $("#saveDataBtn").hide();
+        $("#newsListContainer").empty(); // leere vorherige News
+
+        ladeNewsFuerCoins(currentWallets); // lade News für aktuelle Wallets
+      }
+    });
+
+
+
+
+
+
+
   });
 </script>
 

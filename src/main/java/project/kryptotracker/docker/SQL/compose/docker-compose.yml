@@ -62,3 +62,8 @@ services:
     hostname: ${PHP_MYADMIN_HOST:-phpmyadmin}
     container_name: ${PHP_MYADMIN_HOST:-phpmyadmin}
     restart: always
+
+
+
+
+
